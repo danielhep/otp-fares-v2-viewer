@@ -17,7 +17,7 @@ export const Route = createRootRoute({
         content: 'width=device-width, initial-scale=1',
       },
       {
-        title: 'TanStack Start Starter',
+        title: 'OTP Fare Viewer',
       },
     ],
     links: [
@@ -37,9 +37,11 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       <head>
         <HeadContent />
       </head>
-      <body>
+      <body className="flex min-h-screen flex-col bg-slate-950 text-slate-100">
         <Header />
-        {children}
+        <main className="flex-1">
+          {children}
+        </main>
         <TanStackDevtools
           config={{
             position: 'bottom-left',

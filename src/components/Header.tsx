@@ -1,21 +1,11 @@
-import { Link } from '@tanstack/react-router'
-
 export default function Header() {
   return (
-    <header className="p-2 flex gap-2 bg-white text-black justify-between">
-      <nav className="flex flex-row">
-        <div className="px-2 font-bold">
-          <Link to="/">Home</Link>
-        </div>
-
-        <div className="px-2 font-bold">
-          <Link to="/demo/start/server-funcs">Start - Server Functions</Link>
-        </div>
-
-        <div className="px-2 font-bold">
-          <Link to="/demo/start/api-request">Start - API Request</Link>
-        </div>
-      </nav>
+    <header className="border-b border-slate-800/80 bg-slate-900/90 backdrop-blur">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-1 px-4 py-6 text-slate-100">
+        <h1 className="text-2xl font-semibold">OTP Fare Viewer</h1>
+        <p className="text-sm text-slate-400">Debug tool for OTP fare product analysis</p>
+      </div>
     </header>
   )
 }
+
