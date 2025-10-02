@@ -123,9 +123,6 @@ function parseFareProductPrice(raw: unknown): FareProductPrice | undefined {
   }
   const amountRaw = raw.amount
   const currencyRaw = raw.currency
-  if (typeof amountRaw !== 'number' || !isFinite(amountRaw)) {
-    return undefined
-  }
   if (!isRecord(currencyRaw) || typeof currencyRaw.code !== 'string') {
     return undefined
   }
@@ -134,8 +131,28 @@ function parseFareProductPrice(raw: unknown): FareProductPrice | undefined {
     typeof digitsValue === 'number' && Number.isInteger(digitsValue) && digitsValue >= 0
       ? digitsValue
       : null
+  const normalizedDigits = digits ?? 2
+
+  let amount: number | undefined
+  if (typeof amountRaw === 'number' && isFinite(amountRaw)) {
+    amount = amountRaw
+  } else if (isRecord(amountRaw)) {
+    const parsedValue = amountRaw.parsedValue
+    if (typeof parsedValue === 'number' && isFinite(parsedValue)) {
+      amount = Math.round(parsedValue * 10 ** normalizedDigits)
+    } else if (typeof amountRaw.source === 'string') {
+      const numeric = Number(amountRaw.source)
+      if (!Number.isNaN(numeric) && isFinite(numeric)) {
+        amount = Math.round(numeric * 10 ** normalizedDigits)
+      }
+    }
+  }
+
+  if (typeof amount !== 'number' || !isFinite(amount)) {
+    return undefined
+  }
   return {
-    amount: amountRaw,
+    amount,
     currencyCode: currencyRaw.code,
     currencyDigits: digits,
   }

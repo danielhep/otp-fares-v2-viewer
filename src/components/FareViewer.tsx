@@ -12,6 +12,7 @@ import {
   type FareProductUsage,
 } from '../lib/fare-analysis'
 import { sampleOtpPlanJson } from '../sampleData'
+import { RouteShortNamePill } from './RouteShortNamePill'
 
 const typeAccent: Record<FareProductTypeName, string> = {
   DefaultFareProduct: 'border-blue-500/60 bg-blue-500/10 text-blue-100',
@@ -381,6 +382,7 @@ function ItineraryPanel({ analysis, currentItinerary, onSelectItinerary, selecte
         <nav className="flex flex-wrap gap-3">
           {analysis.itineraries.map((itinerary) => {
             const isActive = itinerary.itineraryIndex === selectedItinerary
+            const transitLegs = itinerary.legs.filter((leg) => leg.transitLeg)
             return (
               <button
                 key={itinerary.itineraryIndex}
@@ -392,12 +394,30 @@ function ItineraryPanel({ analysis, currentItinerary, onSelectItinerary, selecte
                     : 'border-slate-700 bg-slate-900 text-slate-200 hover:border-slate-500'
                 }`}
               >
-                <span className="block text-left font-semibold">
-                  Itinerary {itinerary.itineraryIndex + 1}
-                </span>
-                <span className="block text-xs text-slate-400">
-                  {formatTotals(itinerary.totalsByCurrency)}
-                </span>
+                <div className="flex flex-col gap-1 text-left">
+                  <span className="font-semibold">Itinerary {itinerary.itineraryIndex + 1}</span>
+                  <span className="text-xs text-slate-400">
+                    {formatTotals(itinerary.totalsByCurrency)}
+                  </span>
+                  {transitLegs.length > 0 ? (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {transitLegs.map((leg) => (
+                        <RouteShortNamePill
+                          key={`${itinerary.itineraryIndex}-${leg.legIndex}`}
+                          shortName={leg.routeShortName}
+                          fallback={`Leg ${leg.legIndex + 1}`}
+                          className={
+                            isActive
+                              ? 'border-blue-300/70 bg-blue-500/25 text-blue-100'
+                              : undefined
+                          }
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="mt-1 text-xs text-slate-500">Walk only itinerary</span>
+                  )}
+                </div>
               </button>
             )
           })}
@@ -419,15 +439,12 @@ interface LegDetailsProps {
 }
 
 function LegDetails({ leg }: LegDetailsProps) {
-  const headerLabel = leg.routeShortName
-    ? `${leg.routeShortName}`
-    : `Leg ${leg.legIndex + 1}`
-
   return (
     <article className="rounded-xl border border-slate-700/70 bg-slate-950/80 p-5 shadow-lg shadow-slate-950/30">
-      <header className="mb-4 flex items-center justify-between">
-        <div>
-          <h3 className="text-base font-semibold text-slate-50">Leg {leg.legIndex + 1}: {headerLabel}</h3>
+      <header className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-3">
+          <h3 className="text-base font-semibold text-slate-50">Leg {leg.legIndex + 1}</h3>
+          <RouteShortNamePill shortName={leg.routeShortName} />
         </div>
       </header>
       <div className="space-y-4">
