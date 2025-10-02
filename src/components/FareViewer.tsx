@@ -9,9 +9,9 @@ import {
   type AnalyzedFareProduct,
   type FareAnalysis,
   type FareProductTypeName,
+  type FareProductUsage,
 } from '../lib/fare-analysis'
 import { sampleOtpPlanJson } from '../sampleData'
-import { parse } from 'node:path/win32'
 
 const typeAccent: Record<FareProductTypeName, string> = {
   DefaultFareProduct: 'border-blue-500/60 bg-blue-500/10 text-blue-100',
@@ -87,7 +87,10 @@ export default function FareViewer() {
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pb-10">
       <div className="grid gap-6 lg:grid-cols-[minmax(300px,360px)_minmax(0,1fr)]">
         <div className="space-y-6">
-          <FareSummaryPanel analysis={analysis} />
+          <FareSummaryPanel
+            currentItinerary={currentItinerary}
+            hasAnalysis={Boolean(analysis)}
+          />
           <FareLegend />
         </div>
         <div className="space-y-6">
@@ -180,29 +183,43 @@ function JsonInputPanel({
 }
 
 interface FareSummaryPanelProps {
-  analysis: FareAnalysis | null
+  currentItinerary: FareAnalysis['itineraries'][number] | null
+  hasAnalysis: boolean
 }
 
-function FareSummaryPanel({ analysis }: FareSummaryPanelProps) {
-  if (!analysis) {
+function FareSummaryPanel({ currentItinerary, hasAnalysis }: FareSummaryPanelProps) {
+  if (!hasAnalysis) {
     return (
       <section className="rounded-xl border border-slate-700/70 bg-slate-900/70 p-5 shadow-xl shadow-slate-950/30">
         <h2 className="text-lg font-semibold text-slate-50">Fare Summary</h2>
         <p className="mt-2 text-sm text-slate-400">
-          Parse a plan to see aggregated fare information, reuse counts, and variation alerts.
+          Parse a plan to review fare information, reuse counts, and variation alerts for individual itineraries.
         </p>
       </section>
     )
   }
 
-  const { summary } = analysis
+  if (!currentItinerary) {
+    return (
+      <section className="rounded-xl border border-slate-700/70 bg-slate-900/70 p-5 shadow-xl shadow-slate-950/30">
+        <h2 className="text-lg font-semibold text-slate-50">Fare Summary</h2>
+        <p className="mt-2 text-sm text-slate-400">
+          Select an itinerary to view fare product totals, reuse details, and variations.
+        </p>
+      </section>
+    )
+  }
+
+  const { summary, itineraryIndex } = currentItinerary
 
   return (
     <section className="rounded-xl border border-slate-700/70 bg-slate-900/70 p-5 shadow-xl shadow-slate-950/30">
-      <h2 className="text-lg font-semibold text-slate-50">Fare Summary</h2>
+      <h2 className="text-lg font-semibold text-slate-50">
+        Fare Summary · Itinerary {itineraryIndex + 1}
+      </h2>
       <div className="mt-4 space-y-4 text-sm text-slate-200">
         <div>
-          <h3 className="text-xs uppercase tracking-wide text-slate-400">Total Journey Cost</h3>
+          <h3 className="text-xs uppercase tracking-wide text-slate-400">Total Itinerary Cost</h3>
           <p className="mt-1 text-base font-semibold text-slate-50">
             {formatTotals(summary.totalsByCurrency)}
           </p>
@@ -221,11 +238,11 @@ function FareSummaryPanel({ analysis }: FareSummaryPanelProps) {
           </div>
           <SummaryList
             title="Reused Fare Products"
-            emptyLabel="No reuse detected"
+            emptyLabel="No reuse detected in this itinerary"
             items={summary.reusedProducts.map((usage) => ({
               key: usage.productId,
               heading: usage.productId,
-              description: `${usage.occurrences.length} uses across itineraries`,
+              description: describeReuse(usage),
             }))}
           />
           <SummaryList
@@ -234,13 +251,23 @@ function FareSummaryPanel({ analysis }: FareSummaryPanelProps) {
             items={summary.variationProducts.map((usage) => ({
               key: usage.productId,
               heading: usage.productId,
-              description: `${usage.signatures.length} distinct variations`,
+              description: `${usage.signatures.length} distinct variations detected in this itinerary`,
             }))}
           />
         </div>
       </div>
     </section>
   )
+}
+
+function describeReuse(usage: FareProductUsage): string {
+  const legNumbers = Array.from(
+    new Set(usage.occurrences.map((occurrence) => occurrence.legIndex)),
+  )
+    .sort((a, b) => a - b)
+    .map((legNumber) => `Leg ${legNumber + 1}`)
+  const legsLabel = legNumbers.length > 0 ? legNumbers.join(', ') : 'Multiple legs'
+  return `${usage.occurrences.length} uses · ${legsLabel}`
 }
 
 interface SummaryListProps {
@@ -377,7 +404,7 @@ function ItineraryPanel({ analysis, currentItinerary, onSelectItinerary, selecte
         </nav>
         {currentItinerary ? (
           <div className="space-y-6">
-            {currentItinerary.legs.map((leg) => (
+            {currentItinerary.legs.filter((leg) => leg.transitLeg).map((leg) => (
               <LegDetails key={leg.legIndex} leg={leg} />
             ))}
           </div>
@@ -400,8 +427,7 @@ function LegDetails({ leg }: LegDetailsProps) {
     <article className="rounded-xl border border-slate-700/70 bg-slate-950/80 p-5 shadow-lg shadow-slate-950/30">
       <header className="mb-4 flex items-center justify-between">
         <div>
-          <h3 className="text-base font-semibold text-slate-50">Leg {leg.legIndex + 1}</h3>
-          <p className="text-sm text-slate-400">Route: {headerLabel}</p>
+          <h3 className="text-base font-semibold text-slate-50">Leg {leg.legIndex + 1}: {headerLabel}</h3>
         </div>
       </header>
       <div className="space-y-4">
@@ -435,13 +461,30 @@ function FareProductCard({ analyzed }: FareProductCardProps) {
     highlightClasses.push('ring-1 ring-amber-500/50')
   }
 
+  const legList = Array.from(
+    new Set(
+      usage.occurrences
+        .filter((candidate) => candidate.itineraryIndex === occurrence.itineraryIndex)
+        .map((candidate) => candidate.legIndex),
+    ),
+  )
+    .sort((a, b) => a - b)
+    .map((legNumber) => `Leg ${legNumber + 1}`)
+  const reuseTooltip = usage.isReused
+    ? `Used on ${legList.length > 0 ? legList.join(', ') : 'multiple legs'}`
+    : undefined
+
   return (
     <div className={`rounded-lg border px-4 py-3 transition ${highlightClasses.join(' ')}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-mono text-sm text-slate-100">{fareProduct.id}</span>
           {usage.isReused ? (
-            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${reuseBadge}`}>
+            <span
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${reuseBadge}`}
+              title={reuseTooltip}
+              aria-label={reuseTooltip}
+            >
               ↺ {usage.occurrences.length}
             </span>
           ) : null}

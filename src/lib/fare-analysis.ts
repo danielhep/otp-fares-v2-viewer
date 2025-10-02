@@ -47,6 +47,7 @@ export interface FareProduct {
 export interface OtpLeg {
   routeShortName?: string
   fareProducts: FareProduct[]
+  transitLeg: boolean
 }
 
 export interface OtpItinerary {
@@ -96,19 +97,19 @@ export interface AnalyzedLeg {
   legIndex: number
   routeShortName?: string
   fareProducts: AnalyzedFareProduct[]
+  transitLeg: boolean
 }
 
 export interface AnalyzedItinerary {
   itineraryIndex: number
   legs: AnalyzedLeg[]
   totalsByCurrency: MoneyTotal[]
+  summary: FareSummary
 }
 
 export interface FareAnalysis {
   plan: OtpPlan
-  usages: Map<string, FareProductUsage>
   itineraries: AnalyzedItinerary[]
-  summary: FareSummary
 }
 
 export type ParseOtpPlanResult =
@@ -213,7 +214,7 @@ function parseFareProduct(raw: unknown): FareProduct | undefined {
   }
 }
 
-function parseLeg(raw: unknown): OtpLeg | undefined {
+function parseLeg(raw: OtpLeg): OtpLeg | undefined {
   if (!isRecord(raw)) {
     return undefined
   }
@@ -233,10 +234,11 @@ function parseLeg(raw: unknown): OtpLeg | undefined {
   return {
     routeShortName,
     fareProducts,
+    transitLeg: raw.transitLeg,
   }
 }
 
-function parseItinerary(raw: unknown): OtpItinerary | undefined {
+function parseItinerary(raw: OtpItinerary): OtpItinerary | undefined {
   if (!isRecord(raw)) {
     return undefined
   }
@@ -353,16 +355,16 @@ function cloneTotals(map: Map<string, MoneyTotal>): MoneyTotal[] {
 }
 
 export function analyzePlan(plan: OtpPlan): FareAnalysis {
-  const usageMap = new Map<string, FareProductUsage>()
   const itineraries: AnalyzedItinerary[] = []
-  const productTypeCounts: Record<FareProductTypeName, number> = {
-    DefaultFareProduct: 0,
-    DependentFareProduct: 0,
-  }
 
   plan.itineraries.forEach((itinerary, itineraryIndex) => {
     const itineraryTotals = new Map<string, MoneyTotal>()
     const itinerarySeen = new Set<string>()
+    const itineraryProductTypeCounts: Record<FareProductTypeName, number> = {
+      DefaultFareProduct: 0,
+      DependentFareProduct: 0,
+    }
+    const itineraryUsageMap = new Map<string, FareProductUsage>()
     const analyzedLegs: AnalyzedLeg[] = []
 
     itinerary.legs.forEach((leg, legIndex) => {
@@ -371,10 +373,10 @@ export function analyzePlan(plan: OtpPlan): FareAnalysis {
       leg.fareProducts.forEach((fareProduct) => {
         const { product } = fareProduct
         const productType = product.__typename
-        productTypeCounts[productType] += 1
+        itineraryProductTypeCounts[productType] += 1
 
         const signature = signatureForProduct(product)
-        let usage = usageMap.get(fareProduct.id)
+        let usage = itineraryUsageMap.get(fareProduct.id)
         if (!usage) {
           usage = {
             productId: fareProduct.id,
@@ -385,15 +387,16 @@ export function analyzePlan(plan: OtpPlan): FareAnalysis {
             productType,
             representative: fareProduct,
           }
-          usageMap.set(fareProduct.id, usage)
+          itineraryUsageMap.set(fareProduct.id, usage)
         }
 
-        usage.occurrences.push({
+        const occurrence = {
           itineraryIndex,
           legIndex,
           fareProduct,
           signature,
-        })
+        }
+        usage.occurrences.push(occurrence)
         if (!usage.signatures.includes(signature)) {
           usage.signatures.push(signature)
         }
@@ -401,12 +404,7 @@ export function analyzePlan(plan: OtpPlan): FareAnalysis {
         usage.hasVariation = usage.signatures.length > 1
 
         analyzedProducts.push({
-          occurrence: {
-            itineraryIndex,
-            legIndex,
-            fareProduct,
-            signature,
-          },
+          occurrence,
           usage,
         })
 
@@ -420,47 +418,30 @@ export function analyzePlan(plan: OtpPlan): FareAnalysis {
         legIndex,
         routeShortName: leg.routeShortName,
         fareProducts: analyzedProducts,
+        transitLeg: leg.transitLeg
       })
     })
+
+    const totals = cloneTotals(itineraryTotals)
+    const usages = Array.from(itineraryUsageMap.values())
+    const summary: FareSummary = {
+      totalsByCurrency: totals.map((total) => ({ ...total })),
+      productTypeCounts: { ...itineraryProductTypeCounts },
+      reusedProducts: usages.filter((usage) => usage.isReused),
+      variationProducts: usages.filter((usage) => usage.hasVariation),
+    }
 
     itineraries.push({
       itineraryIndex,
       legs: analyzedLegs,
-      totalsByCurrency: cloneTotals(itineraryTotals),
+      totalsByCurrency: totals,
+      summary,
     })
   })
 
-  const summaryTotals = new Map<string, MoneyTotal>()
-  usageMap.forEach((usage) => {
-    const price = usage.representative.product.price
-    if (price) {
-      addMoney(summaryTotals, price)
-    }
-  })
-
-  const reusedProducts: FareProductUsage[] = []
-  const variationProducts: FareProductUsage[] = []
-  usageMap.forEach((usage) => {
-    if (usage.isReused) {
-      reusedProducts.push(usage)
-    }
-    if (usage.hasVariation) {
-      variationProducts.push(usage)
-    }
-  })
-
-  const summary: FareSummary = {
-    totalsByCurrency: cloneTotals(summaryTotals),
-    productTypeCounts,
-    reusedProducts,
-    variationProducts,
-  }
-
   return {
     plan,
-    usages: usageMap,
     itineraries,
-    summary,
   }
 }
 
