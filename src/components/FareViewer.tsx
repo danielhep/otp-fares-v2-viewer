@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
+import { useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 
 import {
   analyzePlan,
@@ -141,20 +141,16 @@ export default function FareViewer() {
     return { mediumOptions: mediums, riderCategoryOptions: riders }
   }, [analysis])
 
-  useEffect(() => {
-    if (mediumFilter !== 'all' && !mediumOptions.some((option) => option.value === mediumFilter)) {
-      setMediumFilter('all')
-    }
-  }, [mediumFilter, mediumOptions])
+  const activeMediumFilter: FareFilterValue =
+    mediumFilter === 'all' || mediumOptions.some((option) => option.value === mediumFilter)
+      ? mediumFilter
+      : 'all'
 
-  useEffect(() => {
-    if (
-      riderCategoryFilter !== 'all' &&
-      !riderCategoryOptions.some((option) => option.value === riderCategoryFilter)
-    ) {
-      setRiderCategoryFilter('all')
-    }
-  }, [riderCategoryFilter, riderCategoryOptions])
+  const activeRiderCategoryFilter: FareFilterValue =
+    riderCategoryFilter === 'all' ||
+    riderCategoryOptions.some((option) => option.value === riderCategoryFilter)
+      ? riderCategoryFilter
+      : 'all'
 
   const handleChangeInput = (value: string) => {
     setRawInput(value)
@@ -231,8 +227,8 @@ export default function FareViewer() {
             currentItinerary={currentItinerary}
             onSelectItinerary={setSelectedItinerary}
             selectedItinerary={selectedItinerary}
-            mediumFilter={mediumFilter}
-            riderCategoryFilter={riderCategoryFilter}
+            mediumFilter={activeMediumFilter}
+            riderCategoryFilter={activeRiderCategoryFilter}
             onMediumFilterChange={setMediumFilter}
             onRiderCategoryFilterChange={setRiderCategoryFilter}
             mediumOptions={mediumOptions}
