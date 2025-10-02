@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 
 import {
   analyzePlan,
@@ -8,8 +8,10 @@ import {
   parseOtpPlanInput,
   type AnalyzedFareProduct,
   type FareAnalysis,
+  type FareProductProduct,
   type FareProductTypeName,
   type FareProductUsage,
+  type EntityRef,
 } from '../lib/fare-analysis'
 import { sampleOtpPlanJson } from '../sampleData'
 import { RouteShortNamePill } from './RouteShortNamePill'
@@ -27,12 +29,132 @@ const typeChip: Record<FareProductTypeName, string> = {
 const reuseBadge = 'bg-purple-500/20 border border-purple-400/60 text-purple-100'
 const variationBadge = 'bg-amber-500/20 border border-amber-400/60 text-amber-100'
 
+type FareFilterValue = 'all' | 'none' | string
+
+interface FilterOption {
+  value: FareFilterValue
+  label: string
+}
+
+function buildEntityKey(entity?: EntityRef): string {
+  if (!entity) {
+    return 'none'
+  }
+  const idPart = entity.id ?? ''
+  const namePart = entity.name ?? ''
+  return `id:${idPart}|name:${namePart}`
+}
+
+function formatEntityLabel(entity?: EntityRef): string {
+  if (!entity) {
+    return '—'
+  }
+  if (entity.name && entity.id && entity.name !== entity.id) {
+    return `${entity.name} · ${entity.id}`
+  }
+  return entity.name ?? entity.id ?? '—'
+}
+
+function matchesEntity(entity: EntityRef | undefined, filter: FareFilterValue): boolean {
+  if (filter === 'all') {
+    return true
+  }
+  if (filter === 'none') {
+    return !entity
+  }
+  if (!entity) {
+    return false
+  }
+  return buildEntityKey(entity) === filter
+}
+
+function matchesFareFilters(
+  product: FareProductProduct,
+  mediumFilter: FareFilterValue,
+  riderFilter: FareFilterValue,
+): boolean {
+  return matchesEntity(product.medium, mediumFilter) && matchesEntity(product.riderCategory, riderFilter)
+}
+
 export default function FareViewer() {
   const [rawInput, setRawInput] = useState('')
   const [analysis, setAnalysis] = useState<FareAnalysis | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [selectedItinerary, setSelectedItinerary] = useState(0)
   const [lastParsedAt, setLastParsedAt] = useState<number | null>(null)
+  const [mediumFilter, setMediumFilter] = useState<FareFilterValue>('all')
+  const [riderCategoryFilter, setRiderCategoryFilter] = useState<FareFilterValue>('all')
+
+  const { mediumOptions, riderCategoryOptions } = useMemo(() => {
+    if (!analysis) {
+      return { mediumOptions: [] as FilterOption[], riderCategoryOptions: [] as FilterOption[] }
+    }
+
+    const mediumMap = new Map<string, FilterOption>()
+    const riderMap = new Map<string, FilterOption>()
+    let includeMediumNone = false
+    let includeRiderNone = false
+
+    analysis.itineraries.forEach((itinerary) => {
+      itinerary.legs.forEach((leg) => {
+        leg.fareProducts.forEach((analyzed) => {
+          const product = analyzed.occurrence.fareProduct.product
+          const medium = product.medium
+          if (medium) {
+            const key = buildEntityKey(medium)
+            if (!mediumMap.has(key)) {
+              mediumMap.set(key, {
+                value: key,
+                label: formatEntityLabel(medium),
+              })
+            }
+          } else {
+            includeMediumNone = true
+          }
+
+          const rider = product.riderCategory
+          if (rider) {
+            const key = buildEntityKey(rider)
+            if (!riderMap.has(key)) {
+              riderMap.set(key, {
+                value: key,
+                label: formatEntityLabel(rider),
+              })
+            }
+          } else {
+            includeRiderNone = true
+          }
+        })
+      })
+    })
+
+    const mediums = Array.from(mediumMap.values()).sort((a, b) => a.label.localeCompare(b.label))
+    const riders = Array.from(riderMap.values()).sort((a, b) => a.label.localeCompare(b.label))
+
+    if (includeMediumNone) {
+      mediums.push({ value: 'none', label: 'No medium' })
+    }
+    if (includeRiderNone) {
+      riders.push({ value: 'none', label: 'No rider category' })
+    }
+
+    return { mediumOptions: mediums, riderCategoryOptions: riders }
+  }, [analysis])
+
+  useEffect(() => {
+    if (mediumFilter !== 'all' && !mediumOptions.some((option) => option.value === mediumFilter)) {
+      setMediumFilter('all')
+    }
+  }, [mediumFilter, mediumOptions])
+
+  useEffect(() => {
+    if (
+      riderCategoryFilter !== 'all' &&
+      !riderCategoryOptions.some((option) => option.value === riderCategoryFilter)
+    ) {
+      setRiderCategoryFilter('all')
+    }
+  }, [riderCategoryFilter, riderCategoryOptions])
 
   const handleChangeInput = (value: string) => {
     setRawInput(value)
@@ -109,6 +231,12 @@ export default function FareViewer() {
             currentItinerary={currentItinerary}
             onSelectItinerary={setSelectedItinerary}
             selectedItinerary={selectedItinerary}
+            mediumFilter={mediumFilter}
+            riderCategoryFilter={riderCategoryFilter}
+            onMediumFilterChange={setMediumFilter}
+            onRiderCategoryFilterChange={setRiderCategoryFilter}
+            mediumOptions={mediumOptions}
+            riderCategoryOptions={riderCategoryOptions}
           />
         </div>
       </div>
@@ -354,9 +482,26 @@ interface ItineraryPanelProps {
   currentItinerary: FareAnalysis['itineraries'][number] | null
   onSelectItinerary: (index: number) => void
   selectedItinerary: number
+  mediumFilter: FareFilterValue
+  riderCategoryFilter: FareFilterValue
+  onMediumFilterChange: Dispatch<SetStateAction<FareFilterValue>>
+  onRiderCategoryFilterChange: Dispatch<SetStateAction<FareFilterValue>>
+  mediumOptions: FilterOption[]
+  riderCategoryOptions: FilterOption[]
 }
 
-function ItineraryPanel({ analysis, currentItinerary, onSelectItinerary, selectedItinerary }: ItineraryPanelProps) {
+function ItineraryPanel({
+  analysis,
+  currentItinerary,
+  onSelectItinerary,
+  selectedItinerary,
+  mediumFilter,
+  riderCategoryFilter,
+  onMediumFilterChange,
+  onRiderCategoryFilterChange,
+  mediumOptions,
+  riderCategoryOptions,
+}: ItineraryPanelProps) {
   if (!analysis) {
     return (
       <section className="rounded-xl border border-dashed border-slate-700/70 bg-slate-900/40 p-10 text-center text-sm text-slate-400">
@@ -379,6 +524,40 @@ function ItineraryPanel({ analysis, currentItinerary, onSelectItinerary, selecte
         <h2 className="text-lg font-semibold text-slate-50">Itineraries</h2>
       </div>
       <div className="flex flex-col gap-5 p-5">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="flex flex-col gap-2 text-sm text-slate-200">
+            <span className="text-xs uppercase tracking-wide text-slate-400">Fare medium</span>
+            <select
+              value={mediumFilter}
+              onChange={(event) => onMediumFilterChange(event.target.value as FareFilterValue)}
+              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/60"
+            >
+              <option value="all">All fare mediums</option>
+              {mediumOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-2 text-sm text-slate-200">
+            <span className="text-xs uppercase tracking-wide text-slate-400">Rider category</span>
+            <select
+              value={riderCategoryFilter}
+              onChange={(event) =>
+                onRiderCategoryFilterChange(event.target.value as FareFilterValue)
+              }
+              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/60"
+            >
+              <option value="all">All rider categories</option>
+              {riderCategoryOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
         <nav className="flex flex-wrap gap-3">
           {analysis.itineraries.map((itinerary) => {
             const isActive = itinerary.itineraryIndex === selectedItinerary
@@ -425,7 +604,12 @@ function ItineraryPanel({ analysis, currentItinerary, onSelectItinerary, selecte
         {currentItinerary ? (
           <div className="space-y-6">
             {currentItinerary.legs.filter((leg) => leg.transitLeg).map((leg) => (
-              <LegDetails key={leg.legIndex} leg={leg} />
+              <LegDetails
+                key={leg.legIndex}
+                leg={leg}
+                mediumFilter={mediumFilter}
+                riderCategoryFilter={riderCategoryFilter}
+              />
             ))}
           </div>
         ) : null}
@@ -436,9 +620,22 @@ function ItineraryPanel({ analysis, currentItinerary, onSelectItinerary, selecte
 
 interface LegDetailsProps {
   leg: FareAnalysis['itineraries'][number]['legs'][number]
+  mediumFilter: FareFilterValue
+  riderCategoryFilter: FareFilterValue
 }
 
-function LegDetails({ leg }: LegDetailsProps) {
+function LegDetails({ leg, mediumFilter, riderCategoryFilter }: LegDetailsProps) {
+  const filteredProducts = leg.fareProducts.filter((analyzed) =>
+    matchesFareFilters(analyzed.occurrence.fareProduct.product, mediumFilter, riderCategoryFilter),
+  )
+  const hasActiveFilter = mediumFilter !== 'all' || riderCategoryFilter !== 'all'
+  const emptyMessage =
+    leg.fareProducts.length === 0
+      ? 'No fare products on this leg.'
+      : hasActiveFilter
+        ? 'No fare products match the selected filters on this leg.'
+        : 'No fare products on this leg.'
+
   return (
     <article className="rounded-xl border border-slate-700/70 bg-slate-950/80 p-5 shadow-lg shadow-slate-950/30">
       <header className="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -448,11 +645,14 @@ function LegDetails({ leg }: LegDetailsProps) {
         </div>
       </header>
       <div className="space-y-4">
-        {leg.fareProducts.length === 0 ? (
-          <p className="text-sm text-slate-500">No fare products on this leg.</p>
+        {filteredProducts.length === 0 ? (
+          <p className="text-sm text-slate-500">{emptyMessage}</p>
         ) : (
-          leg.fareProducts.map((analyzed) => (
-            <FareProductCard key={`${analyzed.occurrence.legIndex}-${analyzed.occurrence.fareProduct.id}`} analyzed={analyzed} />
+          filteredProducts.map((analyzed) => (
+            <FareProductCard
+              key={`${analyzed.occurrence.legIndex}-${analyzed.occurrence.fareProduct.id}`}
+              analyzed={analyzed}
+            />
           ))
         )}
       </div>
