@@ -1,0 +1,48 @@
+query Plan(...variables) {
+  plan(
+    fromPlace: $fromPlace
+    toPlace: $toPlace
+  ) {
+    itineraries {
+      legs {
+        route {
+          shortName
+        }
+        fareProducts {
+          id
+          product {
+            __typename
+            id
+            medium {
+              id
+              name
+            }
+            name
+            riderCategory {
+              id
+              name
+            }
+            ... on DefaultFareProduct {
+              price {
+                amount
+                currency {
+                  code
+                  digits
+                }
+              }
+            }
+            ... on DependentFareProduct {
+              dependencies {
+                id
+              }
+              price {
+                amount
+                currency {
+                  code
+                }
+              }
+            }
+          }
+        }
+  }
+}
