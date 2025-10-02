@@ -265,14 +265,27 @@ export function parseOtpPlanInput(raw: string): ParseOtpPlanResult {
       message: error instanceof Error ? error.message : 'Unable to parse JSON input',
     }
   }
-  if (!isRecord(parsed) || !isRecord(parsed.plan) || !Array.isArray(parsed.plan.itineraries)) {
-    return {
-      kind: 'error',
-      message: 'Input does not match expected OTP plan structure',
-    }
+
+  const structureError =
+    'Input does not match expected OTP plan structure; expected { "plan": ... } or { "data": { "plan": ... } }'
+
+  if (!isRecord(parsed)) {
+    return { kind: 'error', message: structureError }
   }
+
+  const planRecord = isRecord(parsed.plan)
+    ? parsed.plan
+    : isRecord(parsed.data) && isRecord(parsed.data.plan)
+      ? parsed.data.plan
+      : null
+
+  const rawItineraries = planRecord?.itineraries
+  if (!Array.isArray(rawItineraries)) {
+    return { kind: 'error', message: structureError }
+  }
+
   const itineraries: OtpItinerary[] = []
-  for (const itinerary of parsed.plan.itineraries) {
+  for (const itinerary of rawItineraries) {
     const parsedItinerary = parseItinerary(itinerary)
     if (parsedItinerary) {
       itineraries.push(parsedItinerary)
@@ -491,4 +504,3 @@ export function formatTotals(totals: MoneyTotal[]): string {
     .map((total) => formatMoney(total))
     .join(' + ')
 }
-

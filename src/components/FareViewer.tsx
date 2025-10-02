@@ -11,6 +11,7 @@ import {
   type FareProductTypeName,
 } from '../lib/fare-analysis'
 import { sampleOtpPlanJson } from '../sampleData'
+import { parse } from 'node:path/win32'
 
 const typeAccent: Record<FareProductTypeName, string> = {
   DefaultFareProduct: 'border-blue-500/60 bg-blue-500/10 text-blue-100',
@@ -130,6 +131,7 @@ function JsonInputPanel({
   errorMessage,
   lastParsedAt,
 }: JsonInputPanelProps) {
+  console.log(parseDisabled)
   return (
     <section className="rounded-xl border border-slate-700/70 bg-slate-900/70 shadow-xl shadow-slate-950/30">
       <div className="flex items-center justify-between border-b border-slate-700/60 px-5 py-4">
@@ -151,7 +153,7 @@ function JsonInputPanel({
         <textarea
           value={rawInput}
           onChange={(event) => onChange(event.target.value)}
-          placeholder={`{ "plan": { ... } }`}
+          placeholder={`{ "plan": { ... } } or { "data": { "plan": { ... } } }`}
           className="min-h-[220px] w-full resize-y rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 font-mono text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/60"
         />
         <div className="flex flex-wrap items-center gap-3">
