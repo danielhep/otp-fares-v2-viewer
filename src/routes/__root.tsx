@@ -37,7 +37,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       <head>
         <HeadContent />
       </head>
-      <body className="flex min-h-screen flex-col bg-slate-950 text-slate-100">
+      <body className="flex min-h-screen flex-col gap-4 bg-slate-950 text-slate-100">
         <Header />
         <main className="flex-1">
           {children}
