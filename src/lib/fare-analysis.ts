@@ -135,7 +135,7 @@ function parseFareProductPrice(raw: unknown): FareProductPrice | undefined {
 
   let amount: number | undefined
   if (typeof amountRaw === 'number' && isFinite(amountRaw)) {
-    amount = amountRaw
+    amount = Math.round(amountRaw * 10 ** normalizedDigits)
   } else if (isRecord(amountRaw)) {
     const parsedValue = amountRaw.parsedValue
     if (typeof parsedValue === 'number' && isFinite(parsedValue)) {
