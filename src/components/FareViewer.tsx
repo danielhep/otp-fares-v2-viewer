@@ -266,7 +266,7 @@ function JsonInputPanel({
         <div>
           <h2 className="text-lg font-semibold text-slate-50">Paste OTP JSON</h2>
           <p className="text-sm text-slate-400">
-            Paste the GraphQL response body that contains the plan itineraries and fare products.
+            Paste a GraphQL response with plan itineraries, or paste a single itinerary object.
           </p>
         </div>
         <button
@@ -281,7 +281,7 @@ function JsonInputPanel({
         <textarea
           value={rawInput}
           onChange={(event) => onChange(event.target.value)}
-          placeholder={`{ "plan": { ... } } or { "data": { "plan": { ... } } }`}
+          placeholder={`{ "plan": { "itineraries": [...] } }, { "data": { "plan": { "itineraries": [...] } } }, or { "legs": [...] }`}
           className="min-h-[220px] w-full resize-y rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 font-mono text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/60"
         />
         <div className="flex flex-wrap items-center gap-3">

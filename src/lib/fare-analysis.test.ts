@@ -58,4 +58,45 @@ describe('fare-analysis price parsing', () => {
     expect(price?.currencyDigits).toBe(2)
     expect(formatMoney(price!)).toBe('USD 1.00')
   })
+
+  it('parses a single itinerary object input', () => {
+    const input = JSON.stringify({
+      legs: [
+        {
+          transitLeg: true,
+          route: {
+            shortName: 'A',
+          },
+          fareProducts: [
+            {
+              id: 'fare:single-itinerary',
+              product: {
+                __typename: 'DefaultFareProduct',
+                id: 'single-itinerary-product',
+                price: {
+                  amount: 2.5,
+                  currency: {
+                    code: 'USD',
+                    digits: 2,
+                  },
+                },
+              },
+            },
+          ],
+        },
+      ],
+    })
+
+    const result = parseOtpPlanInput(input)
+    if (result.kind !== 'success') {
+      throw new Error('Expected parse success')
+    }
+
+    expect(result.plan.itineraries).toHaveLength(1)
+    expect(result.plan.itineraries[0]?.legs).toHaveLength(1)
+
+    const analysis = analyzePlan(result.plan)
+    expect(analysis.itineraries).toHaveLength(1)
+    expect(analysis.itineraries[0]?.totalsByCurrency[0]?.amount).toBe(250)
+  })
 })

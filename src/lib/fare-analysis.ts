@@ -286,7 +286,7 @@ export function parseOtpPlanInput(raw: string): ParseOtpPlanResult {
   }
 
   const structureError =
-    'Input does not match expected OTP plan structure; expected { "plan": ... } or { "data": { "plan": ... } }'
+    'Input does not match expected OTP structure; expected { "plan": { "itineraries": [...] } }, { "data": { "plan": { "itineraries": [...] } } }, or a single itinerary object { "legs": [...] }'
 
   if (!isRecord(parsed)) {
     return { kind: 'error', message: structureError }
@@ -298,8 +298,13 @@ export function parseOtpPlanInput(raw: string): ParseOtpPlanResult {
       ? parsed.data.plan
       : null
 
-  const rawItineraries = planRecord?.itineraries
-  if (!Array.isArray(rawItineraries)) {
+  const rawItineraries = Array.isArray(planRecord?.itineraries)
+    ? planRecord.itineraries
+    : Array.isArray(parsed.legs)
+      ? [parsed]
+      : null
+
+  if (!rawItineraries) {
     return { kind: 'error', message: structureError }
   }
 
